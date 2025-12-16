@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Login</title>
+  <link rel="icon" type="image/png" href="images/biblioteca.png">
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #6200ee, #8e2de2);
+    }
+    .container {
+      background: #fff;
+      width: 360px;
+      padding: 35px 30px;
+      border-radius: 14px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+    h2 { text-align: center; margin-bottom: 25px; color:#6200ee; }
+    .campo { position: relative; margin-bottom: 20px; }
+    .campo input {
+      width: 100%;
+      height: 50px;
+      padding: 15px;
+      font-size: 16px;
+      border: 1.5px solid #ccc;
+      border-radius: 10px;
+      outline: none;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #6200ee, #8e2de2);
+      color: #fff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Login</h2>
+  <form id="login-form">
+    <div class="campo">
+      <input type="text" id="ra" placeholder="RA e DIGITO (sem os zeros)" required>
+    </div>
+    <div class="campo">
+      <input type="text" id="senha" placeholder="Senha" required>
+    </div>
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyAcEOwkyjBE7U6l6yPX7rpXhvmfjhpI7_4",
+    authDomain: "jcd-biblioteca.firebaseapp.com",
+    projectId: "jcd-biblioteca",
+    storageBucket: "jcd-biblioteca.firebasestorage.app",
+    messagingSenderId: "34676088650",
+    appId: "1:34676088650:web:f8a76ebcd1e48e9440ebb3"
+  };
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+document.getElementById("login-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  let raOuEmail = document.getElementById("ra").value.trim();
+  const senha = document.getElementById("senha").value.trim();
+
+  let email = raOuEmail;
+
+  // Se o usuário não digitou um email completo, gera o email a partir do RA
+  if (!raOuEmail.includes("@")) {
+    // Sempre adicionar 4 zeros no início
+    email = "0000" + raOuEmail;
+
+    // Garantir "sp" no final
+    if (!email.toLowerCase().endsWith("sp")) email += "sp";
+
+    // Montar email completo
+    email += "@al.educacao.sp.gov.br";
+  }
+
+  console.log("Email gerado:", email, "Senha:", senha);
+
+  try {
+    await signInWithEmailAndPassword(auth, email, senha);
+    window.location.href = "painel.html";
+  } catch (err) {
+    console.error(err);
+    alert(
+      "Erro ao fazer login. Possíveis causas:\n" +
+      "- O RA já tinha zeros e agora adicionamos 0000 no início.\n" +
+      "- Email digitado incorretamente (deve terminar com @al.educacao.sp.gov.br).\n" +
+      "- Senha incorreta."
+    );
+  }
+});
+</script>
+
+
+</body>
+</html>

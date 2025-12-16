@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Painel Biblioteca</title>
+  <link rel="stylesheet" href="images/biblioteca.png">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #6200ee, #8e2de2); color:#fff; min-height:100vh; padding:30px; }
+    h1,h2{ color:#fff; margin-bottom:20px; }
+    #user-book { margin-bottom:20px; padding:15px; background: rgba(0,0,0,0.3); border-radius:8px; font-size:18px; font-weight:500; }
+    input { width:300px; padding:6px; border-radius:4px; border:none; margin-bottom:10px; }
+    button{ padding:6px 12px; border:none; border-radius:4px; background:#03dac6; color:#333; cursor:pointer; transition:0.3s; }
+    button:hover{ background:#00bfa5; }
+    table{ width:100%; border-collapse: collapse; margin-top:10px; color:#fff;}
+    table th, table td{ padding:8px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.2);}
+    table th{ background-color: rgba(255,255,255,0.2);}
+  </style>
+</head>
+<body>
+
+<h1>Pesquisar Livros</h1>
+
+<!-- Aqui aparece o livro atual do usuário -->
+<div id="user-book">Seu Livro: Nenhum</div>
+
+<input type="text" id="filter" placeholder="Buscar por nome, código ou autor...">
+<table>
+  <thead>
+    <tr>
+      <th>Nome</th>
+      <th>Código</th>
+      <th>Autor</th>
+      <th>Emprestado</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody id="table-body"></tbody>
+</table>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, setDoc, query, where } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+const firebaseConfig = {
+    apiKey: "AIzaSyAcEOwkyjBE7U6l6yPX7rpXhvmfjhpI7_4",
+    authDomain: "jcd-biblioteca.firebaseapp.com",
+    projectId: "jcd-biblioteca",
+    storageBucket: "jcd-biblioteca.firebasestorage.app",
+    messagingSenderId: "34676088650",
+    appId: "1:34676088650:web:f8a76ebcd1e48e9440ebb3"
+  };
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+let currentUserUid = null;
+let currentUserRole = null;
+let userLivroNome = "";
+let userCodigoLivro = "";
+let userAuthorlivro = "";
+
+const tbody = document.getElementById("table-body");
+const filterInput = document.getElementById("filter");
+const userBookDiv = document.getElementById("user-book");
+
+// Verifica usuário logado
+onAuthStateChanged(auth, async user => {
+  if(!user){
+    alert("Você precisa estar logado para pedir livros!");
+    window.location.href = "index.html";
+    return;
+  }
+
+  currentUserUid = user.uid;
+  const userSnap = await getDocs(query(collection(db,"users"), where("__name__","==",currentUserUid)));
+  if(!userSnap.empty){
+    const userData = userSnap.docs[0].data();
+    currentUserRole = userData.role;
+
+    if(currentUserRole === "admin"){
+      window.location.href = "admin.html";
+      return;
+    }
+
+    // Se o usuário já tem um livro
+    if (userData.uidLivro) {
+      const livroSnap = await getDocs(query(collection(db, "books"), where("__name__", "==", userData.uidLivro)));
+      if (!livroSnap.empty) {
+        const livroData = livroSnap.docs[0].data();
+        userAuthorlivro = livroData.autor;
+        userLivroNome = livroData.nome;       
+        userCodigoLivro = livroData.codigo;   
+      }
+    }
+  } // fecha o if(!userSnap.empty)
+
+  // Atualiza o painel de livro
+  updateUserBookDiv();
+  loadAndRenderBooks();
+}); // fecha onAuthStateChanged
+
+
+// Atualiza o div "Seu Livro"
+function updateUserBookDiv(){
+  userBookDiv.textContent = "Seu Livro: " + (userLivroNome || "Nenhum") + " - "+ (userAuthorlivro || "") + " - " + (userCodigoLivro || "");
+}
+
+// Verifica se o usuário já tem pedido pendente
+async function hasPendingPedido() {
+  if(!currentUserUid) return false;
+  const q = query(collection(db,"notifications"), 
+                  where("uidUsuario","==",currentUserUid),
+                  where("status","==","pendente"),
+                  where("tipo","==","pedido"));
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+
+// Carrega todos os livros
+async function loadBooks() {
+  const snapshot = await getDocs(collection(db,"books"));
+  return snapshot.docs.map(docSnap => ({ uid: docSnap.id, ...docSnap.data() }));
+}
+
+// Renderiza livros
+async function loadAndRenderBooks() {
+  const books = await loadBooks();
+  renderBooks(books);
+}
+
+function renderBooks(books, filterText="") {
+  tbody.innerHTML = "";
+
+  books.filter(b => 
+    b.nome.toLowerCase().includes(filterText.toLowerCase()) ||
+    b.codigo.toLowerCase().includes(filterText.toLowerCase()) ||
+    b.autor.toLowerCase().includes(filterText.toLowerCase())
+  ).forEach(book => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${book.nome}</td>
+      <td>${book.codigo}</td>
+      <td>${book.autor}</td>
+      <td>${book.emprestado ? "Sim" : "Não"}</td>
+      <td></td>
+    `;
+    tbody.appendChild(tr);
+
+    const tdActions = tr.children[4];
+
+    // Botão pedir livro para usuário comum
+    if(!book.emprestado && currentUserRole !== "admin"){
+      const btn = document.createElement("button");
+      btn.textContent = "Pedir";
+      tdActions.appendChild(btn);
+
+      btn.addEventListener("click", async () => {
+        if(await hasPendingPedido()){
+          alert("Você já tem um pedido pendente!");
+          return;
+        }
+
+        const newDoc = doc(collection(db,"notifications"));
+        await setDoc(newDoc,{
+          uidUsuario: currentUserUid,
+          uidLivro: book.uid,
+          status: "pendente",
+          tipo: "pedido"
+        });
+
+        alert("Pedido enviado com sucesso!");
+        btn.disabled = true;
+
+        // Atualiza a variável e painel de livro
+        userLivroNome = book.nome;
+        updateUserBookDiv();
+      });
+    }
+  });
+
+  // Evita múltiplos listeners
+  filterInput.oninput = e => renderBooks(books, e.target.value);
+}
+</script>
+
+</body>
+</html>
